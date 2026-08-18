@@ -32,24 +32,30 @@ else
 fi
 
 # os version
+# 解析只取主版本号。原 -F'[= ."]' 在 gawk 下会把 VERSION_ID="24.04" 切成 VERSION_ID/24/04，
+# $3 取到次版本 04，导致 Ubuntu 24.04 被误判为 < 16；统一改为按 = 分割后去引号再截主版本。
 if [[ -f /etc/os-release ]]; then
-    os_version=$(awk -F'[= ."]' '/VERSION_ID/{print $3}' /etc/os-release)
+    os_version=$(awk -F= '/^VERSION_ID=/{gsub(/"/,"",$2); print $2; exit}' /etc/os-release)
 fi
 if [[ -z "$os_version" && -f /etc/lsb-release ]]; then
-    os_version=$(awk -F'[= ."]+' '/DISTRIB_RELEASE/{print $2}' /etc/lsb-release)
+    os_version=$(awk -F= '/^DISTRIB_RELEASE=/{gsub(/"/,"",$2); print $2; exit}' /etc/lsb-release)
 fi
+os_version=${os_version%%.*}
 
-if [[ x"${release}" == x"centos" ]]; then
-    if [[ ${os_version} -le 6 ]]; then
-        echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
-    fi
-elif [[ x"${release}" == x"ubuntu" ]]; then
-    if [[ ${os_version} -lt 16 ]]; then
-        echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
-    fi
-elif [[ x"${release}" == x"debian" ]]; then
-    if [[ ${os_version} -lt 8 ]]; then
-        echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
+# 无法确定版本时跳过版本门槛检查
+if [[ -n "$os_version" ]]; then
+    if [[ x"${release}" == x"centos" ]]; then
+        if [[ ${os_version} -le 6 ]]; then
+            echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
+        fi
+    elif [[ x"${release}" == x"ubuntu" ]]; then
+        if [[ ${os_version} -lt 16 ]]; then
+            echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
+        fi
+    elif [[ x"${release}" == x"debian" ]]; then
+        if [[ ${os_version} -lt 8 ]]; then
+            echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
+        fi
     fi
 fi
 
@@ -508,7 +514,6 @@ add_node_config() {
         4 ) NodeType="trojan" ;;
         * ) NodeType="shadowsocks" ;;
     esac
-    fastopen=true
     if [ "$NodeType" == "vless" ]; then
         read -rp "请选择是否为reality节点？(y/n)" isreality
     fi
@@ -535,6 +540,12 @@ add_node_config() {
             echo -e "${red}请手动修改配置文件后重启ljfxznode！${plain}"
         fi
     fi
+    read -rp "是否启用TCP Fast Open(TFO)？(y/n，默认y)：" enable_tfo
+    if [[ "$enable_tfo" =~ ^[Nn] ]]; then
+        enable_tfo_value=false
+    else
+        enable_tfo_value=true
+    fi
     node_config=$(cat <<EOF
 {
             "Core": "$core",
@@ -545,10 +556,10 @@ add_node_config() {
             "Timeout": 30,
             "ListenIP": "0.0.0.0",
             "SendIP": "0.0.0.0",
-            "DeviceOnlineMinTraffic": 200,
+            "DeviceOnlineMinTraffic": 0,
             "ReportMinTraffic": 0,
             "EnableProxyProtocol": false,
-            "EnableTFO": true,
+            "EnableTFO": $enable_tfo_value,
             "EnableDNS": true,
             "DNSType": "UseIPv4",
             "CertConfig": {
@@ -585,8 +596,7 @@ generate_config_file() {
     nodes_config=()
     first_node=true
     fixed_api_info=false
-    check_api=false
-    
+
     while true; do
         if [ "$first_node" = true ]; then
             read -rp "请输入机场网址(https://example.com)：" ApiHost
@@ -626,8 +636,8 @@ generate_config_file() {
     # 切换到配置文件目录
     cd /etc/ljfxznode
     
-    # 备份旧的配置文件
-    mv config.json config.json.bak
+    # 备份旧的配置文件（首次生成时不存在则不备份）
+    [[ -f config.json ]] && mv config.json config.json.bak
     nodes_config_str="${nodes_config[*]}"
     formatted_nodes_config="${nodes_config_str%,}"
 

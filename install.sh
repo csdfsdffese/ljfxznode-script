@@ -44,30 +44,31 @@ fi
 
 echo "架构: ${arch}"
 
-if [ "$(getconf WORD_BIT)" != '32' ] || [ "$(getconf LONG_BIT)" != '64' ] ; then
-    echo "本软件不支持 32 位系统(x86)，请使用 64 位系统(x86_64)，如果检测有误，请联系作者"
-    exit 2
-fi
-
 # os version
+# 解析只取主版本号。原 -F'[= ."]' 在 gawk 下会把 VERSION_ID="24.04" 切成 VERSION_ID/24/04，
+# $3 取到次版本 04，导致 Ubuntu 24.04 被误判为 < 16；统一改为按 = 分割后去引号再截主版本。
 if [[ -f /etc/os-release ]]; then
-    os_version=$(awk -F'[= ."]' '/VERSION_ID/{print $3}' /etc/os-release)
+    os_version=$(awk -F= '/^VERSION_ID=/{gsub(/"/,"",$2); print $2; exit}' /etc/os-release)
 fi
 if [[ -z "$os_version" && -f /etc/lsb-release ]]; then
-    os_version=$(awk -F'[= ."]+' '/DISTRIB_RELEASE/{print $2}' /etc/lsb-release)
+    os_version=$(awk -F= '/^DISTRIB_RELEASE=/{gsub(/"/,"",$2); print $2; exit}' /etc/lsb-release)
 fi
+os_version=${os_version%%.*}
 
-if [[ x"${release}" == x"centos" ]]; then
-    if [[ ${os_version} -le 6 ]]; then
-        echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
-    fi
-elif [[ x"${release}" == x"ubuntu" ]]; then
-    if [[ ${os_version} -lt 16 ]]; then
-        echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
-    fi
-elif [[ x"${release}" == x"debian" ]]; then
-    if [[ ${os_version} -lt 8 ]]; then
-        echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
+# 无法确定版本时跳过版本门槛检查
+if [[ -n "$os_version" ]]; then
+    if [[ x"${release}" == x"centos" ]]; then
+        if [[ ${os_version} -le 6 ]]; then
+            echo -e "${red}请使用 CentOS 7 或更高版本的系统！${plain}\n" && exit 1
+        fi
+    elif [[ x"${release}" == x"ubuntu" ]]; then
+        if [[ ${os_version} -lt 16 ]]; then
+            echo -e "${red}请使用 Ubuntu 16 或更高版本的系统！${plain}\n" && exit 1
+        fi
+    elif [[ x"${release}" == x"debian" ]]; then
+        if [[ ${os_version} -lt 8 ]]; then
+            echo -e "${red}请使用 Debian 8 或更高版本的系统！${plain}\n" && exit 1
+        fi
     fi
 fi
 
@@ -76,7 +77,8 @@ install_base() {
         yum install epel-release wget curl unzip tar crontabs socat ca-certificates -y >/dev/null 2>&1
         update-ca-trust force-enable >/dev/null 2>&1
     elif [[ x"${release}" == x"alpine" ]]; then
-        apk add wget curl unzip tar socat ca-certificates >/dev/null 2>&1
+        # 管理脚本与安装脚本均以 #!/bin/bash 运行，alpine 默认无 bash，必须一并安装
+        apk add bash wget curl unzip tar socat ca-certificates >/dev/null 2>&1
         update-ca-certificates >/dev/null 2>&1
     elif [[ x"${release}" == x"debian" ]]; then
         apt-get update -y >/dev/null 2>&1
@@ -84,13 +86,11 @@ install_base() {
         update-ca-certificates >/dev/null 2>&1
     elif [[ x"${release}" == x"ubuntu" ]]; then
         apt-get update -y >/dev/null 2>&1
-        apt install wget curl unzip tar cron socat -y >/dev/null 2>&1
-        apt-get install ca-certificates wget -y >/dev/null 2>&1
+        apt install wget curl unzip tar cron socat ca-certificates -y >/dev/null 2>&1
         update-ca-certificates >/dev/null 2>&1
     elif [[ x"${release}" == x"arch" ]]; then
         pacman -Sy --noconfirm >/dev/null 2>&1
-        pacman -S --noconfirm --needed wget curl unzip tar cron socat >/dev/null 2>&1
-        pacman -S --noconfirm --needed ca-certificates wget >/dev/null 2>&1
+        pacman -S --noconfirm --needed wget curl unzip tar cron socat ca-certificates >/dev/null 2>&1
     fi
 }
 
@@ -278,7 +278,8 @@ EOF
         echo -e "${red}下载管理脚本失败，原管理脚本未受影响，可稍后执行 ljfxznode update_shell 重新下载${plain}"
     fi
     cd $cur_dir
-    rm -f install.sh
+    # 注意：不自删本脚本（install.sh 实际是被 ljfxznode 下载到临时文件后 bash 执行的，
+    # 删除 install.sh 是空操作，反而可能误删调用目录下的同名文件）
     echo -e ""
     echo "ljfxznode 管理脚本使用方法: "
     echo "------------------------------------------"
