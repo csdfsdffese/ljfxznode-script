@@ -595,24 +595,18 @@ generate_config_file() {
     
     nodes_config=()
     first_node=true
-    fixed_api_info=false
 
     while true; do
         if [ "$first_node" = true ]; then
             read -rp "请输入机场网址(https://example.com)：" ApiHost
             read -rp "请输入面板对接API Key：" ApiKey
-            read -rp "是否设置固定的机场网址和API Key？(y/n)" fixed_api
-            if [ "$fixed_api" = "y" ] || [ "$fixed_api" = "Y" ]; then
-                fixed_api_info=true
-                echo -e "${red}成功固定地址${plain}"
-            fi
             first_node=false
             add_node_config
         else
             read -rp "是否继续添加节点配置？(回车继续，输入n或no退出)" continue_adding_node
             if [[ "$continue_adding_node" =~ ^[Nn][Oo]? ]]; then
                 break
-            elif [ "$fixed_api_info" = false ]; then
+            else
                 read -rp "请输入机场网址：" ApiHost
                 read -rp "请输入面板对接API Key：" ApiKey
             fi
