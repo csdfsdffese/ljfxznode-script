@@ -540,12 +540,6 @@ add_node_config() {
             echo -e "${red}请手动修改配置文件后重启ljfxznode！${plain}"
         fi
     fi
-    read -rp "是否启用TCP Fast Open(TFO)？(y/n，默认y)：" enable_tfo
-    if [[ "$enable_tfo" =~ ^[Nn] ]]; then
-        enable_tfo_value=false
-    else
-        enable_tfo_value=true
-    fi
     node_config=$(cat <<EOF
 {
             "Core": "$core",
@@ -559,7 +553,7 @@ add_node_config() {
             "DeviceOnlineMinTraffic": 0,
             "ReportMinTraffic": 0,
             "EnableProxyProtocol": false,
-            "EnableTFO": $enable_tfo_value,
+            "EnableTFO": false,
             "EnableDNS": true,
             "DNSType": "UseIPv4",
             "CertConfig": {
