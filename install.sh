@@ -264,8 +264,15 @@ EOF
     if [[ ! -f /etc/ljfxznode/custom_outbound.json ]]; then
         cp custom_outbound.json /etc/ljfxznode/
     fi
+    # custom_inbound.json 默认只提供空 inbound 列表，防止默认开放无认证代理端口（socks noauth）
+    # 被扫描器滥用。旧版安装包曾内置 socks noauth 0.0.0.0:1234 模板并随首次安装部署到
+    # /etc/ljfxznode/，此处检测到该特征即用空列表覆盖；用户自己改过的自定义 inbound 不受影响。
     if [[ ! -f /etc/ljfxznode/custom_inbound.json ]]; then
         cp custom_inbound.json /etc/ljfxznode/
+    elif grep -q '"protocol"[[:space:]]*:[[:space:]]*"socks"' /etc/ljfxznode/custom_inbound.json \
+        && grep -q '"auth"[[:space:]]*:[[:space:]]*"noauth"' /etc/ljfxznode/custom_inbound.json; then
+        cp -f custom_inbound.json /etc/ljfxznode/
+        echo -e "${yellow}检测到旧版无认证 socks 自定义 inbound，已替换为安全的空配置；如需自定义 inbound 请编辑 /etc/ljfxznode/custom_inbound.json${plain}"
     fi
     # 管理脚本先下载到临时文件校验后原子替换，失败时旧脚本不受影响
     tmp_file=$(mktemp)
