@@ -613,6 +613,7 @@ generate_config_file() {
         \"Type\": \"xray\",
         \"Log\": {
             \"Level\": \"error\",
+            \"AccessPath\": \"/etc/ljfxznode/access.log\",
             \"ErrorPath\": \"/etc/ljfxznode/error.log\"
         },
         \"DnsConfigPath\": \"/etc/ljfxznode/dns.json\",
